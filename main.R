@@ -37,7 +37,7 @@ ui = dashboardPage(skin = "blue",
                                                              menuItem("LinkedIn",href="https://www.linkedin.com/in/fabianokafor", icon=icon("linkedin")),
                                                              br(),
                                                              br(),
-                                                             textInput("hashtag", "Search hashtag", value = " "),
+                                                             textInput("hashtag", "Search hashtag, word or phrase", value = " "),
                                                              sliderInput("searchnumber", "Number of searches for analysis", min = 200, max = 3000, value = 800, step= 200),
                                                              checkboxInput("retweets", "Include retweets", value = FALSE),
                                                              actionButton("save","Add")
@@ -70,7 +70,7 @@ ui = dashboardPage(skin = "blue",
                        ),
                        tabItem(tabName="about", h1("About this dashboard"),
                                p("Having read this article " ,span(a("Locating Natural Disasters through Social Media Feeds with R", href="https://towardsdatascience.com/locating-natural-disasters-through-social-media-feeds-with-r-7c8d3f078750")), 
-                                 "this dashboard provides an interactive avenue for individuals to track natural disasters around the world. Twitter data retrieved using the Twitter api is cleaned and related to a given search hashtag or word, is cleaned, and plotted over a google map. This allows users to locate clusters of areas where reactions to that given hashtag is greatest. A sentiment analysis and word cloud visualization also gives a general idea of the aggregate feelings expressed through tweets related to that search. Finally, the change in frequency of that search item over the past couple of days is displayed on a line graph.  "),
+                                 "this dashboard provides an interactive avenue for individuals to track natural disasters around the world. On startup, the dashboard contains filler data visualizations as place holders. However, twitter data retrieved using the Twitter api is cleaned and related to a given search hashtag or word, is cleaned, and plotted over a google map. This allows users to locate clusters of areas where reactions to that given hashtag is greatest. A sentiment analysis and word cloud visualization also gives a general idea of the aggregate feelings expressed through tweets related to that search. Finally, the change in frequency of that search item over the past couple of days is displayed on a line graph.  "),
                                p("This dashboard is a member of a series of data visualization applications built by this same author(using Rshiny). Amongst this series is the ", span(a("GDP index data visualization dashboard", href="https://fabianokafor369.shinyapps.io/GDPapp/")),
                                  "which is an interactive platform for the observation of trends in GDP leading index data of US states. It was built using the Rshiny package, together with Rstudio packages such as googlevis, plotly and rtweet."),
                                p(code("Disclaimer:"), "This app was created using the Twitter API, and its use should be restricted to its purpose of natural disaster information gathering and visualization. Examples of hastags and search items for natural disasters could include '#earthquake', 'hurricane', 'LAwildfire' etc. For more info on the Twitter API use terms and service, visit " , span(a("Twitter Developer Rules", href="https://developer.twitter.com/en/developer-terms/agreement-and-policy.html.")), ".")))
@@ -80,6 +80,45 @@ ui = dashboardPage(skin = "blue",
 
 server <- shinyServer(function(input, output, session) {
     showNotification("Select inputs for data visualization and click on enter to view plots", duration = 7, type = "message")
+    output$summary5 <- renderGvis({
+        gvisMap(Andrew, "LatLong" , "Tip",options=list(showTip=TRUE, showLine=TRUE, enableScrollWheel=TRUE,mapType='hybrid', useMapTypeControl=TRUE,height=570))
+    })
+    
+    output$singlewcloud <- renderPlot({
+        data(crude)
+        crude <- tm_map(crude, removePunctuation)
+        crude <- tm_map(crude, function(x)removeWords(x,stopwords()))
+        wordcloud(crude)
+    })
+    
+    output$linechart <- renderPlot({
+        t <- plot(ts(matrix(rnorm(300), 100, 3), start = c(1966, 1), frequency = 12))
+        t
+    })
+    
+    output$wcloudgrouped <- renderPlot({
+        data(SOTU)
+        corp <- SOTU
+        corp <- tm_map(corp, removePunctuation)
+        corp <- tm_map(corp, content_transformer(tolower))
+        corp <- tm_map(corp, removeNumbers)
+        corp <- tm_map(corp, function(x)removeWords(x,stopwords()))
+        
+        term.matrix <- TermDocumentMatrix(corp)
+        term.matrix <- as.matrix(term.matrix)
+        colnames(term.matrix) <- c("SOTU 2010","SOTU 2011")
+        comparison.cloud(term.matrix,max.words=10,random.order=FALSE,
+                         match.colors=TRUE)
+    })
+    
+    output$sentanalysis <- renderPlotly({
+        df <- data.frame(mood=c("happy", "angry", "sad"),
+                         population=c(14, 100, 98))
+        ggplot(df, aes(x=mood, y=population, fill=mood)) +geom_bar(stat="identity")+theme_minimal()
+        
+        
+    })
+    
     observeEvent(input$save, {
         showNotification("The dashboard takes some time to request that much data from the Twitter API. While you wait, feel free to learn more about this app", action = a("About", onclick = "openTab('about')", href="#"), duration = NULL)
         t = as.character(input$hashtag)
@@ -102,16 +141,16 @@ server <- shinyServer(function(input, output, session) {
         
         tweets.df <- data.frame(tweets.df)
         emotions <- get_nrc_sentiment(tweets.df$text)
-        tweetswithloc <- tweets.df %>% drop_na(lat, lng)
+        tweetswithlocation <- tweets.df %>% drop_na(lat, lng)
         
         
         output$summary5 <- renderGvis({
             #gvisMap(Andrew, "LatLong" , "Tip",options=list(showTip=TRUE, showLine=TRUE, enableScrollWheel=TRUE,mapType='hybrid', useMapTypeControl=TRUE, width=800,height=500))
-            gvisMap(tweetswithloc, locationvar="latlng" , tipvar= "source", options = list(height=550))
+            gvisMap(tweetswithlocation, locationvar="latlng" , tipvar= "source", options = list(height=550))
         })
         
         output$tweetloccount <- renderInfoBox({
-            infoBox("Number of tweets with location", paste0(length(tweetswithloc)) , icon=icon("thumbtack", lib = "font-awesome"))
+            infoBox("Number of tweets with location", paste0(dim(tweetswithlocation)[1]) , icon=icon("thumbtack", lib = "font-awesome"))
         })
         
         output$mostactive <- renderInfoBox({
@@ -123,7 +162,7 @@ server <- shinyServer(function(input, output, session) {
         })
         
         output$mostprominent <- renderInfoBox({
-            infoBox("Most prominent earthquake location", paste0(data.frame(sort(table(tweets.df$place_name)))[length(table(tweets.df$place_name)),1]), icon = icon("search-location", lib = "font-awesome"))
+            infoBox("Most prominent disaster location", paste0(data.frame(sort(table(tweets.df$place_name)))[length(table(tweets.df$place_name)),1]), icon = icon("search-location", lib = "font-awesome"))
         })
         
         output$singlewcloud <- renderPlot({
@@ -148,7 +187,7 @@ server <- shinyServer(function(input, output, session) {
             # Visualize the emotions from NRC sentiments
             p <- plot_ly(emo_sum, x=~emotion, y=~count, type="bar", color=~emotion) %>%
                 layout(xaxis=list(title=""), showlegend=FALSE,
-                       title="Emotion Type for hashtag: #earthquake")
+                       title="Emotion Type for search item")
             p
         })
         
@@ -189,7 +228,7 @@ server <- shinyServer(function(input, output, session) {
             colnames(tdmnew) <- colnames(tdm)
             thecloud <- comparison.cloud(tdmnew, random.order=FALSE,
                                          colors = c("#00B2FF", "red", "#FF0099", "#6600CC", "green", "orange", "blue", "brown"),
-                                         title.size=1, max.words=100, scale=c(2.5, 0.5), rot.per=0.4)
+                                         title.size=1, max.words=400, scale=c(2.5, 0.5), rot.per=0.4)
             thecloud
             
         })
