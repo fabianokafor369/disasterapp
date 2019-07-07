@@ -135,18 +135,20 @@ server <- shinyServer(function(input, output, session) {
         tweets.df$text = gsub("http\\w+", "", tweets.df$text)
         tweets.df$text = gsub("[ \t]{2,}", "", tweets.df$text)
         tweets.df$text = gsub("^\\s+|\\s+$", "", tweets.df$text)
+        tweets.df$text = gsub("[\r\n]", "", tweets.df$text)
         tweets.df$text <- iconv(tweets.df$text, "UTF-8", "ASCII", sub="")
         tweets.df <- lat_lng(tweets.df)
         tweets.df$latlng <- paste(as.character(tweets.df$lat), as.character(tweets.df$lng), sep =  ":") 
         
         tweets.df <- data.frame(tweets.df)
         emotions <- get_nrc_sentiment(tweets.df$text)
+        tweets.df$emotionfelt <- colnames(emotions)[max.col(emotions,ties.method="first")]
         tweetswithlocation <- tweets.df %>% drop_na(lat, lng)
         
         
         output$summary5 <- renderGvis({
             #gvisMap(Andrew, "LatLong" , "Tip",options=list(showTip=TRUE, showLine=TRUE, enableScrollWheel=TRUE,mapType='hybrid', useMapTypeControl=TRUE, width=800,height=500))
-            gvisMap(tweetswithlocation, locationvar="latlng" , tipvar= "source", options = list(height=550))
+            gvisMap(tweetswithlocation, locationvar="latlng" , tipvar= "text", options = list(height=550))
         })
         
         output$tweetloccount <- renderInfoBox({
